@@ -12,10 +12,32 @@ POSTS = [
 ]
 
 
-# GET Endpoint to Retrieve All Posts
-@app.route('/api/posts', methods=['GET'])
+# GET Endpoint to Retrieve All Posts with Optional Sorting
+@app.route('/api/posts/', methods=['GET'])
 def get_posts():
-    return jsonify(POSTS)
+    # Get the optional sort and direction query parameters
+    sort_field = request.args.get('sort')
+    sort_direction = request.args.get('direction', 'asc')
+
+    valid_sort_fields = ['title', 'content']
+    valid_directions = ['asc', 'desc']
+
+    # Validate the sort field and direction
+    if sort_field and sort_field not in valid_sort_fields:
+        return jsonify({"error": "Incalid sort field. Use 'title' or 'content'."}), 400
+    
+    if sort_direction and sort_direction not in valid_directions:
+        return jsonify({"error": "Invalid direction. Use 'asc' or 'desc'."}), 400
+    
+    # If sorting is requested, sort the posts accordingly
+    sorted_posts = POSTS
+    if sort_field:
+        sorted_posts = sorted(
+            POSTS,
+            key=lambda post: post[sort_field].lower(),  # Sorting case-insensitively
+            reverse=(sort_direction == 'desc')
+        )
+    return jsonify(sorted_posts)
 
 
 # POST Endpoint to Add a Nwe Book
