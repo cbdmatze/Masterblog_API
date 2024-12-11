@@ -1,121 +1,48 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+from flask import Flask, request, jsonify
+from functools import wraps
+from datetime import datetime
+import json
+import os
 
 
 app = Flask(__name__)
-CORS(app) # Enable CORS for all routes
 
 
-POSTS = [
-    {"id": 1, "title": "First post", "content": "This is the first post."},
-    {"id": 2, "title": "Second post", "content": "This is the second post."},
-]
+# Simple in-memmory user store and token store
+USERS = {}
+TOKENS = {}
 
 
-# GET Endpoint to Retrieve All Posts with Optional Sorting
-@app.route('/api/posts/', methods=['GET'])
-def get_posts():
-    # Get the optional sort and direction query parameters
-    sort_field = request.args.get('sort')
-    sort_direction = request.args.get('direction', 'asc')
-
-    valid_sort_fields = ['title', 'content']
-    valid_directions = ['asc', 'desc']
-
-    # Validate the sort field and direction
-    if sort_field and sort_field not in valid_sort_fields:
-        return jsonify({"error": "Incalid sort field. Use 'title' or 'content'."}), 400
-    
-    if sort_direction and sort_direction not in valid_directions:
-        return jsonify({"error": "Invalid direction. Use 'asc' or 'desc'."}), 400
-    
-    # If sorting is requested, sort the posts accordingly
-    sorted_posts = POSTS
-    if sort_field:
-        sorted_posts = sorted(
-            POSTS,
-            key=lambda post: post[sort_field].lower(),  # Sorting case-insensitively
-            reverse=(sort_direction == 'desc')
-        )
-    return jsonify(sorted_posts)
+# File for persistant post storage
+FILE_PATH = 'redundant_things_to_know.json'
 
 
-# POST Endpoint to Add a Nwe Book
-@app.route('/api/posts', methods=['POST'])
-def add_post():
-    data = request.json
-
-    # Ceck if title and content are provided
-    if not data or 'title' not in data or 'content' not in data:
-        missing_fields = []
-        if 'title' not in data:
-            missing_fields.append('title')
-        if 'content' not in data:
-            missing_fields.append('content')
-        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
-    
-    # Create new post with auto-incremented ID
-    new_id = max(post['id'] for post in POSTS) + 1 if POSTS else 1
-    new_post = {
-        "id": new_id, 
-        "title": data['title'],
-        "content": data['content']
-    }
-
-    POSTS.append(new_post)
-
-    return jsonify(new_post), 201
+# Rate Limiter
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 
-# DELETE Endpoint to Remove a Post by ID
-@app.route('/api/posts/<int:id>', methods=['DELETE'])
-def delete_post(id):
-    # Find the post by id
-    post = next((post for post in POSTS if post['id'] == id), None)
-
-    # If the post is not found, return 404
-    if post is None:
-        return jsonify({"error": "Post not found"})
-    
-    # Remove the post from the list
-    POSTS.remove(post)
-
-    return jsonify({"message": f"Post with id {id} has been deleted"}), 200
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hoer"]
+)
 
 
-# PUT Endpoint to Update an Existing Post
-@app.route('/api/posts/<int:id>', methods=['PUT'])
-def update_post(id):
-    data = request.json
-
-    # Find the post by id
-    post = next((post for post in POSTS if post['id'] == id), None)
-
-    if post is None:
-        return jsonify({"error": "Post not found"}), 404
-    
-    # Update title and/or content if provided
-    post['title'] = data.get('title', post['title'])
-    post['content'] = data.get('content', post['content'])
-
-    return jsonify(post), 200
+# Load and save posts from JSON file for persistance
+def load_posts():
+    if os.path.exists(FILE_PATH):
+        with open(FILE_PATH, 'r') as f:
+            return json.load(f)
+    return []
 
 
-# GET Endpoint to Search Posts by Title or Content
-@app.route('/api/posts/search', methods=['GET'])
-def search_post():
-    title_query = request.args.get('title', '')
-    content_query = request.args.get('content', '')
-
-    # Filter posts based on search queries
-    results = [
-        post for post in POSTS
-        if title_query.lower() in post['title'].lower() or content_query.lower() in post['content'].lower()
-    ]
-
-    return jsonify(results), 200
+def save_posts(posts):
+    with open(FILE_PATH, 'w') as f:
+        json.dump(posts, f)
 
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5002, debug=True)
-    
+POSTS = load_posts()
+
+
+# User Authentication
