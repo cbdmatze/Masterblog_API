@@ -85,12 +85,12 @@ def login():
 def login_required(f):
     """Decorator function to require a valid login token for protected routes."""
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def check_credentials(*args, **kwargs):
         token = request.headers.get('Authorization')
         if token not in TOKENS:
             return jsonify({"error": "Unauthorized"}), 403
         return f(*args, **kwargs)
-    return decorated_function
+    return check_credentials
 
 
 # Pagination and sorting for posts
