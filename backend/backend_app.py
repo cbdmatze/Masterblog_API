@@ -15,8 +15,8 @@ USERS = {}
 TOKENS = {}
 
 
-# Filter for persistant post storage
-FILE_PATH = 'redundant_things_of_paramount_importance.json'
+# File for persistent post storage
+FILE_PATH = 'posts.json'
 
 
 # Initialize rate limiter
@@ -27,20 +27,19 @@ limiter = Limiter(
 )
 
 
-# Load and save psts from JSON file for persistance
+# Load and save posts from JSON file for persistence
 def load_posts():
     """Loads posts from a JSON file if it exists, otherwise returns an empty list."""
     if os.path.exists(FILE_PATH):
-        with open(FILE_PATH, 'r') as f:
-            return json.load(f)
+        with open(FILE_PATH, 'r') as file:
+            return json.load(file)
     return []
 
 
 def save_posts(posts):
-    """Save the current list of posts to the JSON file."""
-    with open(FILE_PATH, 'w') as f:
-        json.dump(posts, f)
-
+    """Saves the current list of posts to the JSON file."""
+    with open(FILE_PATH, 'w') as file:
+        json.dump(posts, file)
 
 POSTS = load_posts()
 
@@ -56,9 +55,9 @@ def register():
     data = request.json
     username = data['username']
     password = data['password']
-
+    
     if username in USERS:
-        return jsonify({"error": "User already exists."}), 400
+        return jsonify({"error": "User already exists"}), 400
     
     USERS[username] = password
     return jsonify({"message": "User registered successfully"}), 201
@@ -74,7 +73,7 @@ def login():
     data = request.json
     username = data['username']
     password = data['password']
-
+    
     if USERS.get(username) == password:
         token = f"token_{username}"
         TOKENS[token] = username
@@ -117,14 +116,14 @@ def get_posts_v1():
     paginated_posts = sorted_posts[start:end]
 
     return jsonify({
-        "total_posts": total_posts, 
-        "page": page, 
+        "total_posts": total_posts,
+        "page": page,
         "per_page": per_page,
         "posts": paginated_posts
     })
 
 
-# Search funtionality for posts
+# Search functionality for posts
 @app.route('/api/v1/posts/search', methods=['GET'])
 @limiter.limit("5 per minute")
 def search_posts():
@@ -136,10 +135,10 @@ def search_posts():
     query = request.args.get('query', '').lower()
     results = [
         post for post in POSTS
-        if  query in post['title'].lower() or
-            query in post['content'].lower() or
-            query in post['author'].lower() or
-            query in post['date']
+        if query in post['title'].lower() or
+           query in post['content'].lower() or
+           query in post['author'].lower() or
+           query in post['date']
     ]
     return jsonify(results)
 
@@ -168,7 +167,7 @@ def add_post():
 
 
 # Update an existing post
-@app.route('/api/v1/posts/<int:id>', methods=['PUT'])
+@app.route('/api/v1/posts/<int:post_id>', methods=['PUT'])
 @login_required
 @limiter.limit("5 per minute")
 def update_post(post_id):
@@ -177,4 +176,34 @@ def update_post(post_id):
     
     Returns the updated post or an error if the post was not found.
     """
+    data = request.json
+    for post in POSTS:
+        if post['id'] == post_id:
+            post['title'] = data.get('title', post['title'])
+            post['content'] = data.get('content', post['content'])
+            post['author'] = data.get('author', post['author'])
+            post['date'] = data.get('date', post['date'])
+            save_posts(POSTS)
+            return jsonify(post)
+    return jsonify({"error": "Post not found"}), 404
+
+
+# Delete a post
+@app.route('/api/v1/posts/<int:post_id>', methods=['DELETE'])
+@login_required
+@limiter.limit("5 per minute")
+def delete_post(post_id):
+    """
+    Deletes a post by its ID. Requires a valid login token.
     
+    Returns a success message or an error if the post was not found.
+    """
+    global POSTS
+    POSTS = [post for post in POSTS if post['id'] != post_id]
+    save_posts(POSTS)
+    return jsonify({"message": "Post deleted"}), 200
+
+
+# Run Flask app
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5002, debug=True)
