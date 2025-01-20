@@ -3,21 +3,14 @@ from functools import wraps
 from datetime import datetime
 import json
 import os
+import mysql.connector
+import bcrypt
+import jwt
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-
 app = Flask(__name__)
-
-
-# Simple in-memory user store and token store
-USERS = {}
-TOKENS = {}
-
-
-# File for persistent post storage
-FILE_PATH = 'posts.json'
-
+app.config['SECRET_KEY'] = 'your_secret_key'
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -26,94 +19,119 @@ limiter = Limiter(
     default_limits=["200 per day", "50 per hour"]
 )
 
+# Database setup
+DATABASE_CONFIG = {
+    'user': 'root',
+    'password': 'Ma-294022275',
+    'host': 'localhost',
+    'database': 'myblog'
+}
 
-# Load and save posts from JSON file for persistence
-def load_posts():
-    """Loads posts from a JSON file if it exists, otherwise returns an empty list."""
-    if os.path.exists(FILE_PATH):
-        with open(FILE_PATH, 'r') as file:
-            return json.load(file)
-    return []
+def init_db():
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        username VARCHAR(255) UNIQUE NOT NULL,
+                        password VARCHAR(255) NOT NULL)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS posts (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        title VARCHAR(255) NOT NULL,
+                        content TEXT NOT NULL,
+                        author VARCHAR(255) NOT NULL,
+                        date DATE NOT NULL)''')
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-
-def save_posts(posts):
-    """Saves the current list of posts to the JSON file."""
-    with open(FILE_PATH, 'w') as file:
-        json.dump(posts, file)
-
-POSTS = load_posts()
-
+init_db()
 
 # User Registration and Authentication
 @app.route('/api/register', methods=['POST'])
 def register():
-    """
-    Registers a new user by saving their username and password.
-    
-    Returns an error if the username already exists.
-    """
     data = request.json
-    username = data['username']
-    password = data['password']
+    username = data.get('username')
+    password = data.get('password')
     
-    if username in USERS:
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    
+    try:
+        conn = mysql.connector.connect(**DATABASE_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, hashed_password))
+        conn.commit()
+    except mysql.connector.IntegrityError:
         return jsonify({"error": "User already exists"}), 400
+    finally:
+        cursor.close()
+        conn.close()
     
-    USERS[username] = password
     return jsonify({"message": "User registered successfully"}), 201
-
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    """
-    Logs in a user by verifying their credentials and returns an authorization token.
-    
-    Returns an error if the credentials are invalid.
-    """
     data = request.json
-    username = data['username']
-    password = data['password']
+    username = data.get('username')
+    password = data.get('password')
     
-    if USERS.get(username) == password:
-        token = f"token_{username}"
-        TOKENS[token] = username
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if user and bcrypt.checkpw(password.encode('utf-8'), user[0].encode('utf-8')):
+        token = jwt.encode({'username': username}, app.config['SECRET_KEY'], algorithm='HS256')
         return jsonify({"token": token}), 200
+    
     return jsonify({"error": "Invalid credentials"}), 401
-
 
 # Token-based login required decorator
 def login_required(f):
-    """Decorator function to require a valid login token for protected routes."""
     @wraps(f)
     def check_credentials(*args, **kwargs):
         token = request.headers.get('Authorization')
-        if token not in TOKENS:
+        if not token:
             return jsonify({"error": "Unauthorized"}), 403
+        try:
+            jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired"}), 403
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Invalid token"}), 403
         return f(*args, **kwargs)
     return check_credentials
-
 
 # Pagination and sorting for posts
 @app.route('/api/v1/posts', methods=['GET'])
 @limiter.limit("5 per minute")
 def get_posts_v1():
-    """
-    Retrieves a paginated and optionally sorted list of blog posts.
-    
-    Supports pagination with 'page' and 'per_page' parameters, as well as sorting
-    by any field with 'sort' and 'direction' (asc or desc).
-    """
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 5))
     sort_field = request.args.get('sort', 'date')
     sort_direction = request.args.get('direction', 'asc')
 
-    total_posts = len(POSTS)
+    if page < 1 or per_page < 1:
+        return jsonify({"error": "Invalid pagination parameters"}), 400
+
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(f"SELECT * FROM posts ORDER BY {sort_field} {'DESC' if sort_direction == 'desc' else 'ASC'}")
+    posts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    total_posts = len(posts)
     start = (page - 1) * per_page
     end = start + per_page
-
-    sorted_posts = sorted(POSTS, key=lambda x: x.get(sort_field, ''), reverse=(sort_direction == 'desc'))
-    paginated_posts = sorted_posts[start:end]
+    paginated_posts = posts[start:end]
 
     return jsonify({
         "total_posts": total_posts,
@@ -122,87 +140,86 @@ def get_posts_v1():
         "posts": paginated_posts
     })
 
-
 # Search functionality for posts
 @app.route('/api/v1/posts/search', methods=['GET'])
 @limiter.limit("5 per minute")
 def search_posts():
-    """
-    Searches posts by title, content, author, or date using a query string.
-    
-    Returns posts that match the search query.
-    """
     query = request.args.get('query', '').lower()
-    results = [
-        post for post in POSTS
-        if query in post['title'].lower() or
-           query in post['content'].lower() or
-           query in post['author'].lower() or
-           query in post['date']
-    ]
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM posts WHERE LOWER(title) LIKE %s OR LOWER(content) LIKE %s OR LOWER(author) LIKE %s OR date LIKE %s", 
+                   (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%'))
+    results = cursor.fetchall()
+    cursor.close()
+    conn.close()
     return jsonify(results)
-
 
 # Create a new post
 @app.route('/api/v1/posts', methods=['POST'])
 @login_required
 @limiter.limit("5 per minute")
 def add_post():
-    """
-    Adds a new blog post. Requires a valid login token.
-    
-    Returns the created post.
-    """
     data = request.json
-    new_post = {
-        "id": max(post['id'] for post in POSTS) + 1 if POSTS else 1,
-        "title": data['title'],
-        "content": data['content'],
-        "author": data.get('author', 'Anonymous'),
-        "date": datetime.now().strftime('%Y-%m-%d')
-    }
-    POSTS.append(new_post)
-    save_posts(POSTS)
-    return jsonify(new_post), 201
-
+    title = data.get('title')
+    content = data.get('content')
+    author = data.get('author', 'Anonymous')
+    
+    if not title or not content:
+        return jsonify({"error": "Title and content are required"}), 400
+    
+    date = datetime.now().strftime('%Y-%m-%d')
+    
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO posts (title, content, author, date) VALUES (%s, %s, %s, %s)", (title, content, author, date))
+    conn.commit()
+    post_id = cursor.lastrowid
+    cursor.close()
+    conn.close()
+    
+    return jsonify({"id": post_id, "title": title, "content": content, "author": author, "date": date}), 201
 
 # Update an existing post
 @app.route('/api/v1/posts/<int:post_id>', methods=['PUT'])
 @login_required
 @limiter.limit("5 per minute")
 def update_post(post_id):
-    """
-    Updates an existing post. Requires a valid login token.
-    
-    Returns the updated post or an error if the post was not found.
-    """
     data = request.json
-    for post in POSTS:
-        if post['id'] == post_id:
-            post['title'] = data.get('title', post['title'])
-            post['content'] = data.get('content', post['content'])
-            post['author'] = data.get('author', post['author'])
-            post['date'] = data.get('date', post['date'])
-            save_posts(POSTS)
-            return jsonify(post)
-    return jsonify({"error": "Post not found"}), 404
-
+    title = data.get('title')
+    content = data.get('content')
+    author = data.get('author')
+    date = data.get('date')
+    
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM posts WHERE id = %s", (post_id,))
+    post = cursor.fetchone()
+    if not post:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Post not found"}), 404
+    
+    cursor.execute("UPDATE posts SET title = %s, content = %s, author = %s, date = %s WHERE id = %s", 
+                   (title or post['title'], content or post['content'], author or post['author'], date or post['date'], post_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return jsonify({"id": post_id, "title": title or post['title'], "content": content or post['content'], "author": author or post['author'], "date": date or post['date']})
 
 # Delete a post
 @app.route('/api/v1/posts/<int:post_id>', methods=['DELETE'])
 @login_required
 @limiter.limit("5 per minute")
 def delete_post(post_id):
-    """
-    Deletes a post by its ID. Requires a valid login token.
+    conn = mysql.connector.connect(**DATABASE_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM posts WHERE id = %s", (post_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
     
-    Returns a success message or an error if the post was not found.
-    """
-    global POSTS
-    POSTS = [post for post in POSTS if post['id'] != post_id]
-    save_posts(POSTS)
     return jsonify({"message": "Post deleted"}), 200
-
 
 # Run Flask app
 if __name__ == '__main__':

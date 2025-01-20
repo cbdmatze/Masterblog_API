@@ -31,7 +31,10 @@ function loadPosts() {
                 postContainer.appendChild(postDiv);
             });
         })
-        .catch(error => console.error('Error loading posts:', error));
+        .catch(error => {
+            console.error('Error loading posts:', error);
+            alert('Error loading posts: ' + error.message);
+        });
 }
 
 // Function to send a POST request to the API to add a new post
@@ -44,6 +47,10 @@ function addPost() {
         alert("Title and content cannot be empty!");
         return;
     }
+
+    // Sanitize input
+    postTitle = postTitle.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    postContent = postContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     fetch(baseUrl + '/posts', {
         method: 'POST',
@@ -60,7 +67,10 @@ function addPost() {
         console.log('Post added:', post);
         loadPosts();
     })
-    .catch(error => console.error('Error adding post:', error));
+    .catch(error => {
+        console.error('Error adding post:', error);
+        alert('Error adding post: ' + error.message);
+    });
 }
 
 // Function to send a DELETE request to the API to delete a post
@@ -77,5 +87,8 @@ function deletePost(postId) {
         console.log('Post deleted:', postId);
         loadPosts();
     })
-    .catch(error => console.error('Error deleting post:', error));
+    .catch(error => {
+        console.error('Error deleting post:', error);
+        alert('Error deleting post: ' + error.message);
+    });
 }
