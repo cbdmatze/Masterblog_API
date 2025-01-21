@@ -36,5 +36,41 @@ The backend is powered by Flask, with features such as rate limiting, user authe
 1. Clone the repository.
 2. Install dependencies:
 
->>> bash
-   pip install -r requirements.txt
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3. Set up the database configuration in `config.py`.
+4. Run the application:
+
+    ```bash
+    python run.py
+    ```
+
+## Configuration
+
+Ensure you have a `config.py` file with the following structure:
+
+```python
+DATABASE_CONFIG = {
+    'user': 'your_db_user',
+    'password': 'your_db_password',
+    'host': 'your_db_host',
+    'database': 'your_db_name'
+}
+
+SECRET_KEY = 'your_secret_key'
+
+License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+Acknowledgements
+Flask
+MySQL Connector/Python
+bcrypt
+PyJWT
+Flask-Limiter
+Enjoy blogging with REDUNDANT THINGS OF PARAMOUNT IMPORTANCE!
+
+
+This [readme.md](http://_vscodecontentref_/4) provides a comprehensive overview of your application, its features, API endpoints, setup instructions, and acknowledgements.

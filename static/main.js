@@ -54,7 +54,10 @@ function addPost() {
 
     fetch(baseUrl + '/posts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrf_token')  // Include CSRF token
+        },
         body: JSON.stringify({ title: postTitle, content: postContent })
     })
     .then(response => {
@@ -78,7 +81,10 @@ function deletePost(postId) {
     var baseUrl = document.getElementById('api-base-url').value;
 
     fetch(baseUrl + '/posts/' + postId, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCookie('csrf_token')  // Include CSRF token
+        }
     })
     .then(response => {
         if (!response.ok) {
@@ -91,4 +97,20 @@ function deletePost(postId) {
         console.error('Error deleting post:', error);
         alert('Error deleting post: ' + error.message);
     });
+}
+
+// Function to get a cookie value by name
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }

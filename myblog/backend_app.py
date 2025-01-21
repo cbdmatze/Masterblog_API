@@ -1,5 +1,6 @@
 # myblog/backend_app.py
 from flask import Flask, request, jsonify
+from flask_wtf.csrf import CSRFProtect
 from functools import wraps
 from datetime import datetime
 import os
@@ -7,6 +8,9 @@ import mysql.connector
 import bcrypt
 import jwt
 from myblog import app, limiter
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
 
 # Database setup
 DATABASE_CONFIG = app.config['DATABASE_CONFIG']
@@ -32,6 +36,7 @@ init_db()
 
 # User Registration and Authentication
 @app.route('/api/register', methods=['POST'])
+@csrf.exempt  # Exempt CSRF protection for API endpoints if necessary
 def register():
     data = request.json
     username = data.get('username')
@@ -56,6 +61,7 @@ def register():
     return jsonify({"message": "User registered successfully"}), 201
 
 @app.route('/api/login', methods=['POST'])
+@csrf.exempt  # Exempt CSRF protection for API endpoints if necessary
 def login():
     data = request.json
     username = data.get('username')
