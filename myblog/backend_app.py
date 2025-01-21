@@ -1,31 +1,15 @@
+# myblog/backend_app.py
 from flask import Flask, request, jsonify
 from functools import wraps
 from datetime import datetime
-import json
 import os
 import mysql.connector
 import bcrypt
 import jwt
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-
-# Initialize rate limiter
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"]
-)
+from myblog import app, limiter
 
 # Database setup
-DATABASE_CONFIG = {
-    'user': 'root',
-    'password': 'Ma-294022275',
-    'host': 'localhost',
-    'database': 'myblog'
-}
+DATABASE_CONFIG = app.config['DATABASE_CONFIG']
 
 def init_db():
     conn = mysql.connector.connect(**DATABASE_CONFIG)
@@ -220,7 +204,3 @@ def delete_post(post_id):
     conn.close()
     
     return jsonify({"message": "Post deleted"}), 200
-
-# Run Flask app
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
