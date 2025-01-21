@@ -4,7 +4,7 @@ from flask_testing import TestCase
 import json
 from myblog import app, limiter
 from myblog.backend_app import init_db  # Import the init_db function from the backend_app module
-import jwt
+import jwt  # Correct import for PyJWT
 import datetime
 
 class MyBlogTestCase(TestCase):
