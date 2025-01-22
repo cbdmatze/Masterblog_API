@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📚 MyBlog</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/frontend_style.css') }}">
 </head>
 <body>
     <div class="container">
         <h1>📚 REDUNDANT THINGS OF PARAMOUNT IMPORTAMCE</h1>
         <div class="input-field">
-            <input type="text" id="api-base-url" placeholder="Enter API Base URL" value="http://127.0.0.1:5002/api">
+            <input type="text" id="api-base-url" placeholder="Enter API Base URL" value="http://127.0.0.1:5002/api/v1">
             <button onclick="loadPosts()">Load Posts</button>
         </div>
         <div class="input-field">

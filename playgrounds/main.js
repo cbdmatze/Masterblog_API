@@ -12,7 +12,7 @@ function loadPosts() {
     var baseUrl = document.getElementById('api-base-url').value;
     localStorage.setItem('apiBaseUrl', baseUrl);
 
-    fetch(baseUrl + '/api/v1/posts')
+    fetch(baseUrl + '/posts')
         .then(response => {
             if (!response.ok) {
                 throw new Error("Failed to fetch posts.");
@@ -23,7 +23,7 @@ function loadPosts() {
             const postContainer = document.getElementById('post-container');
             postContainer.innerHTML = '';
 
-            data.posts.forEach(post => {
+            data.forEach(post => {
                 const postDiv = document.createElement('div');
                 postDiv.className = 'post';
                 postDiv.innerHTML = `<h2>${post.title}</h2><p>${post.content}</p>
@@ -52,7 +52,7 @@ function addPost() {
     postTitle = postTitle.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     postContent = postContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    fetch(baseUrl + '/api/v1/posts', {
+    fetch(baseUrl + '/posts', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -80,7 +80,7 @@ function addPost() {
 function deletePost(postId) {
     var baseUrl = document.getElementById('api-base-url').value;
 
-    fetch(baseUrl + '/api/v1/posts/' + postId, {
+    fetch(baseUrl + '/posts/' + postId, {
         method: 'DELETE',
         headers: {
             'X-CSRFToken': getCookie('csrf_token')  // Include CSRF token
