@@ -1,5 +1,4 @@
-# myblog/backend_app.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_wtf.csrf import CSRFProtect
 from functools import wraps
 from datetime import datetime
@@ -8,6 +7,7 @@ import mysql.connector
 import bcrypt
 import jwt
 from myblog import app, limiter
+from forms import RegisterForm, LoginForm, PostForm
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
@@ -35,53 +35,50 @@ def init_db():
 init_db()
 
 # User Registration and Authentication
-@app.route('/api/register', methods=['POST'])
-@csrf.exempt  # Exempt CSRF protection for API endpoints if necessary
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
-    
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    
-    try:
+    form = RegisterForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        try:
+            conn = mysql.connector.connect(**DATABASE_CONFIG)
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, hashed_password))
+            conn.commit()
+        except mysql.connector.IntegrityError:
+            flash("User already exists", "danger")
+            return redirect(url_for('register'))
+        finally:
+            cursor.close()
+            conn.close()
+        
+        flash("User registered successfully", "success")
+        return redirect(url_for('login'))
+    return render_template('register.html', form=form)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        password = form.password.data
+        
         conn = mysql.connector.connect(**DATABASE_CONFIG)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, hashed_password))
-        conn.commit()
-    except mysql.connector.IntegrityError:
-        return jsonify({"error": "User already exists"}), 400
-    finally:
+        cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
         cursor.close()
         conn.close()
-    
-    return jsonify({"message": "User registered successfully"}), 201
-
-@app.route('/api/login', methods=['POST'])
-@csrf.exempt  # Exempt CSRF protection for API endpoints if necessary
-def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
-    
-    conn = mysql.connector.connect(**DATABASE_CONFIG)
-    cursor = conn.cursor()
-    cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    
-    if user and bcrypt.checkpw(password.encode('utf-8'), user[0].encode('utf-8')):
-        token = jwt.encode({'username': username}, app.config['SECRET_KEY'], algorithm='HS256')
-        return jsonify({"token": token}), 200
-    
-    return jsonify({"error": "Invalid credentials"}), 401
+        
+        if user and bcrypt.checkpw(password.encode('utf-8'), user[0].encode('utf-8')):
+            token = jwt.encode({'username': username}, app.config['SECRET_KEY'], algorithm='HS256')
+            return jsonify({"token": token}), 200
+        
+        flash("Invalid credentials", "danger")
+    return render_template('login.html', form=form)
 
 # Token-based login required decorator
 def login_required(f):
@@ -145,29 +142,27 @@ def search_posts():
     return jsonify(results)
 
 # Create a new post
-@app.route('/api/v1/posts', methods=['POST'])
+@app.route('/add_post', methods=['GET', 'POST'])
 @login_required
-@limiter.limit("5 per minute")
 def add_post():
-    data = request.json
-    title = data.get('title')
-    content = data.get('content')
-    author = data.get('author', 'Anonymous')
-    
-    if not title or not content:
-        return jsonify({"error": "Title and content are required"}), 400
-    
-    date = datetime.now().strftime('%Y-%m-%d')
-    
-    conn = mysql.connector.connect(**DATABASE_CONFIG)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO posts (title, content, author, date) VALUES (%s, %s, %s, %s)", (title, content, author, date))
-    conn.commit()
-    post_id = cursor.lastrowid
-    cursor.close()
-    conn.close()
-    
-    return jsonify({"id": post_id, "title": title, "content": content, "author": author, "date": date}), 201
+    form = PostForm()
+    if form.validate_on_submit():
+        title = form.title.data
+        content = form.content.data
+        author = form.author.data
+        date = datetime.now().strftime('%Y-%m-%d')
+        
+        conn = mysql.connector.connect(**DATABASE_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO posts (title, content, author, date) VALUES (%s, %s, %s, %s)", (title, content, author, date))
+        conn.commit()
+        post_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        flash("Post added successfully", "success")
+        return redirect(url_for('get_posts_v1'))
+    return render_template('add_post.html', form=form)
 
 # Update an existing post
 @app.route('/api/v1/posts/<int:post_id>', methods=['PUT'])

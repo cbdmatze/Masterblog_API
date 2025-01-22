@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-5">Login</h1>
+<form method="POST" action="" class="bg-white p-6 rounded shadow-md">
+    {{ form.hidden_tag() }}
+    <div class="mb-4">
+        {{ form.username.label(class="block text-gray-700") }}
+        {{ form.username(class="form-input mt-1 block w-full") }}
+    </div>
+    <div class="mb-4">
+        {{ form.password.label(class="block text-gray-700") }}
+        {{ form.password(class="form-input mt-1 block w-full") }}
+    </div>
+    <div class="mb-4">
+        {{ form.submit(class="bg-blue-500 text-white py-2 px-4 rounded") }}
+    </div>
+</form>
+{% endblock %}

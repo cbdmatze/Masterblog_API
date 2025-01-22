@@ -1,0 +1,24 @@
+{
+  "name": "masterblog_api",
+  "version": "1.0.0",
+  "description": "## Overview",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:css": "tailwindcss -i ./src/tailwind.css -o ./static/css/tailwind.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/cbdmatze/masterblog_api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cbdmatze/masterblog_api/issues"
+  },
+  "homepage": "https://github.com/cbdmatze/masterblog_api#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
