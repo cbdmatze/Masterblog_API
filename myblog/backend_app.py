@@ -203,5 +203,5 @@ def delete_post(post_id):
     conn.commit()
     cursor.close()
     conn.close()
-   
+  
     return jsonify({"message": "Post deleted"}), 200
